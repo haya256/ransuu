@@ -140,13 +140,18 @@ h1{
   display:flex;align-items:center;gap:.5rem;
   font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;color:var(--dim);
 }
-.max-ctl input{
-  width:4.4rem;padding:.55rem .5rem;text-align:center;
+.max-ctl select{
+  width:4.4rem;padding:.55rem 1.15rem .55rem .55rem;text-align:center;
   font-family:var(--mono);font-size:1rem;font-variant-numeric:tabular-nums;
   background:var(--panel);color:var(--text);
   border:1px solid var(--line);border-radius:8px;
+  appearance:none;-webkit-appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238d93a5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right .4rem center;
 }
-.max-ctl input:focus-visible{outline:none;border-color:var(--amber)}
+.max-ctl select:focus-visible{outline:none;border-color:var(--amber)}
+.max-ctl select:disabled{opacity:.5;cursor:default}
+.max-ctl option{background:var(--panel);color:var(--text)}
 button{
   font-family:var(--sans);font-size:.95rem;cursor:pointer;
   border-radius:8px;padding:.68rem 1.6rem;border:1px solid transparent;
@@ -274,7 +279,7 @@ footer{
     <div class="progress"><div class="bar" id="bar"></div></div>
 
     <div class="controls">
-      <label class="max-ctl">1 〜 <input type="number" id="max" min="2" max="100" value="15" inputmode="numeric" title="ホイールで増減（Shift で ±10）"> の整数</label>
+      <label class="max-ctl">1 〜 <select id="max" title="ホイールで増減（Shift で ±10）"></select> の整数</label>
       <button id="drawBtn">抽選開始</button>
       <button id="soundBtn" aria-pressed="true" aria-label="効果音の切り替え">&#9835; ON</button>
     </div>
@@ -436,6 +441,13 @@ function frame(){
 requestAnimationFrame(frame);
 
 /* ============ 抽選 ============ */
+for(let i=2;i<=100;i++){
+  const o=document.createElement('option');
+  o.value=o.textContent=i;
+  maxInput.appendChild(o);
+}
+maxInput.value=15;
+
 function clampMax(){
   let v=parseInt(maxInput.value,10);
   if(!Number.isFinite(v)) v=15;
@@ -452,7 +464,7 @@ maxInput.addEventListener('wheel',e=>{
   const dir=e.deltaY<0?1:-1;
   let v=parseInt(maxInput.value,10);
   if(!Number.isFinite(v))v=15;
-  maxInput.value=v+dir*step;
+  maxInput.value=Math.min(100,Math.max(2,v+dir*step));
   if(clampMax()!==v)tickSound();
 },{passive:false});
 
