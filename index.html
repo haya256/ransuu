@@ -303,7 +303,7 @@ footer{
     <ul id="hist"></ul>
   </section>
 
-  <footer>データは保存されません ── リロードで消えます</footer>
+  <footer>データは保存されません ── リロードで消えます<br><span id="lastMod"></span></footer>
 </main>
 <div id="waves"></div>
 <div id="flash"></div>
@@ -645,6 +645,12 @@ function addHistory(n,max){
 }
 
 clampMax();
+
+/* 最終更新: サーバーのLast-Modifiedヘッダ由来なのでデプロイ反映確認に使える */
+const lm=new Date(document.lastModified);
+$('lastMod').textContent='最終更新 '+lm.toLocaleString('ja-JP',{
+  year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'
+});
 </script>
 </body>
 </html>
