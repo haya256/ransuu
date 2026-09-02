@@ -19,6 +19,8 @@
   --dim:#8d93a5;
   --mono:ui-monospace,'Cascadia Code','SF Mono',Consolas,'Roboto Mono',monospace;
   --sans:'Hiragino Sans','Noto Sans JP','Yu Gothic UI',system-ui,sans-serif;
+  --numcol:6.2rem; /* 数字列の固定幅。行ごとに独立したgridなので、内容が無い行(メモ行)でも
+                       他の列(時刻等)が揃うよう max-content ではなく固定値にする */
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -195,11 +197,18 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 }
 .log h2::after{content:'';flex:1;height:1px;background:var(--line)}
 #count{color:var(--dim);letter-spacing:.1em}
+#addLogBtn{
+  font-family:var(--mono);font-size:.64rem;font-weight:400;letter-spacing:.05em;
+  text-transform:none;background:transparent;color:var(--dim);
+  border:1px solid var(--line);border-radius:6px;padding:.3rem .65rem;
+  white-space:nowrap;transition:color .15s,border-color .15s;
+}
+#addLogBtn:hover{color:var(--amber);border-color:#3c3222}
 .empty{font-size:.85rem;color:var(--dim);text-align:center;padding:1.4rem 0}
 #hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
 #hist li{
   display:grid;align-items:center;gap:.35rem 1rem;
-  grid-template-columns:max-content max-content 1fr max-content max-content;
+  grid-template-columns:var(--numcol) max-content 1fr max-content max-content;
   grid-template-areas:"num time memo done del";
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
   padding:.65rem 1rem;
@@ -207,7 +216,10 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   animation:slidein .4s ease-out;
 }
 @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
-.h-numwrap{grid-area:num;display:flex;align-items:baseline;gap:.45rem}
+.h-numwrap{
+  grid-area:num;display:flex;align-items:baseline;gap:.45rem;
+  overflow:hidden;white-space:nowrap;
+}
 .h-num{
   font-family:var(--mono);font-variant-numeric:tabular-nums;
   font-size:1.55rem;font-weight:700;color:var(--amber);
@@ -243,7 +255,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .h-del:hover{color:#e2543e}
 @media(max-width:600px){
   #hist li{
-    grid-template-columns:max-content 1fr max-content max-content;
+    grid-template-columns:var(--numcol) 1fr max-content max-content;
     grid-template-areas:"num time done del" "memo memo memo memo";
   }
 }
@@ -299,7 +311,7 @@ footer{
   </section>
 
   <section class="log">
-    <h2>Log ── 記録 <span id="count"></span></h2>
+    <h2>Log ── 記録 <span id="count"></span><button id="addLogBtn" type="button">+ メモ行を追加</button></h2>
     <p class="empty" id="empty">まだ記録はありません。抽選するとここに並びます。</p>
     <ul id="hist"></ul>
   </section>
@@ -645,10 +657,13 @@ function updateCount(){
 function addHistory(n,max){
   const li=document.createElement('li');
   const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  const numHtml=n==null?'':
+    `<span class="h-numwrap"><span class="h-num">${n}</span><span class="h-range">/ 1–${max}</span></span>`;
+  const memoLabel=n==null?'メモ':'この数字へのメモ';
   li.innerHTML=
-    `<span class="h-numwrap"><span class="h-num">${n}</span><span class="h-range">/ 1–${max}</span></span>`+
+    numHtml+
     `<span class="h-time">${t}</span>`+
-    `<input class="h-memo" type="text" placeholder="メモ" aria-label="この数字へのメモ">`+
+    `<input class="h-memo" type="text" placeholder="メモ" aria-label="${memoLabel}">`+
     `<label class="h-done"><input type="checkbox">完了</label>`+
     `<button class="h-del" type="button" title="この記録を削除" aria-label="この記録を削除">&#10005;</button>`;
   li.querySelector('input[type=checkbox]').addEventListener('change',e=>{
@@ -662,6 +677,10 @@ function addHistory(n,max){
   updateCount();
   return li.querySelector('.h-memo');
 }
+
+$('addLogBtn').addEventListener('click',()=>{
+  addHistory(null,null).focus();
+});
 
 clampMax();
 
