@@ -497,7 +497,8 @@ function clampMax(){
   return v;
 }
 maxInput.addEventListener('change',clampMax);
-maxInput.addEventListener('wheel',e=>{
+/* 上限セレクトと乱数表示(チューブ)のどちらの上でもホイールで上限を増減できる */
+function wheelMax(e){
   if(maxInput.disabled)return;
   e.preventDefault();
   const step=e.shiftKey?10:1;
@@ -506,7 +507,9 @@ maxInput.addEventListener('wheel',e=>{
   if(!Number.isFinite(v))v=15;
   maxInput.value=Math.min(100,Math.max(2,v+dir*step));
   if(clampMax()!==v)tickSound();
-},{passive:false});
+}
+maxInput.addEventListener('wheel',wheelMax,{passive:false});
+tube.addEventListener('wheel',wheelMax,{passive:false});
 function stepMax(delta){
   if(maxInput.disabled)return;
   const v=parseInt(maxInput.value,10);
