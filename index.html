@@ -534,7 +534,10 @@ function doCancel(){
   cancelled=true;
   if(waitRes)waitRes();
 }
-drawBtn.addEventListener('click',()=>{drawing?doCancel():runDraw();});
+function toggleDraw(){drawing?doCancel():runDraw();}
+drawBtn.addEventListener('click',toggleDraw);
+/* 乱数表示(チューブ)のクリックも抽選開始/キャンセルボタンと同じ動作 */
+tube.addEventListener('click',toggleDraw);
 
 function makeDelays(){
   if(REDUCED) return [80,120,180,260,360];
