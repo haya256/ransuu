@@ -496,7 +496,15 @@ function clampMax(){
   rangeLabel.innerHTML=`1 &#8212; ${v}`;
   return v;
 }
-maxInput.addEventListener('change',clampMax);
+/* 上限の変更は上部のビッグ数字にもリアルタイム反映する(操作中は無効なので抽選中には走らない) */
+function syncDigit(){
+  const v=clampMax();
+  digit.textContent=v;
+  digit.classList.remove('reveal');
+  return v;
+}
+maxInput.addEventListener('change',syncDigit);
+maxInput.addEventListener('input',syncDigit);
 /* 上限セレクトと乱数表示(チューブ)のどちらの上でもホイールで上限を増減できる */
 function wheelMax(e){
   if(maxInput.disabled)return;
@@ -506,7 +514,7 @@ function wheelMax(e){
   let v=parseInt(maxInput.value,10);
   if(!Number.isFinite(v))v=15;
   maxInput.value=Math.min(100,Math.max(2,v+dir*step));
-  if(clampMax()!==v)tickSound();
+  if(syncDigit()!==v)tickSound();
 }
 maxInput.addEventListener('wheel',wheelMax,{passive:false});
 tube.addEventListener('wheel',wheelMax,{passive:false});
@@ -514,7 +522,7 @@ function stepMax(delta){
   if(maxInput.disabled)return;
   const v=parseInt(maxInput.value,10);
   maxInput.value=Math.min(100,Math.max(2,(Number.isFinite(v)?v:15)+delta));
-  clampMax();
+  syncDigit();
   tickSound();
 }
 maxDown.addEventListener('click',()=>stepMax(-1));
