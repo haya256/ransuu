@@ -326,7 +326,7 @@ let phase='idle', drawing=false, cancelled=false, waitRes=null, soundOn=true;
 let AC=null, humNodes=null;
 function actx(){
   if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)();
-  if(AC.state==='suspended') AC.resume();
+  if(AC.state!=='running') AC.resume();
   return AC;
 }
 function startHum(){
