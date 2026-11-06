@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>乱数抽選機 RS-15</title>
+</head>
+<body>
+<style>
+:root{
+  --ink:#0b0d12;
+  --panel:#10131c;
+  --line:#1d2230;
+  --amber:#ffb454;
+  --amber-hi:#ffd9a0;
+  --copper:#b0805a;
+  --text:#e7e3da;
+  --dim:#8d93a5;
+  --mono:ui-monospace,'Cascadia Code','SF Mono',Consolas,'Roboto Mono',monospace;
+  --sans:'Hiragino Sans','Noto Sans JP','Yu Gothic UI',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink);
+  background-image:radial-gradient(ellipse 120% 80% at 50% -10%, #141826 0%, var(--ink) 60%);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+main{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:2.2rem 1.2rem 4rem}
+
+/* ---------- masthead ---------- */
+.masthead{text-align:center;margin-bottom:2.4rem}
+.eyebrow{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.34em;
+  color:var(--copper);text-transform:uppercase;margin:0 0 .5rem;
+}
+h1{
+  font-size:clamp(1.5rem,5vw,2rem);font-weight:700;margin:0;
+  letter-spacing:.14em;text-wrap:balance;
+}
+
+/* ---------- tube ---------- */
+.machine{text-align:center}
+.tube{
+  position:relative;width:min(76vw,330px);aspect-ratio:1;margin:0 auto;
+  border-radius:50%;cursor:pointer;
+  background:radial-gradient(circle at 35% 30%, #1d2230 0%, #12151f 45%, #0a0c13 100%);
+  box-shadow:inset 0 0 70px #000, 0 0 0 1px #262b3a, 0 0 90px rgba(255,180,84,.05);
+  display:grid;place-items:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.tube::after{ /* glass reflection */
+  content:'';position:absolute;top:7%;left:13%;width:34%;height:19%;
+  border-radius:50%;transform:rotate(-25deg);pointer-events:none;
+  background:linear-gradient(rgba(255,255,255,.08),transparent);
+}
+.ring{position:absolute;border-radius:50%;pointer-events:none}
+.r1{
+  inset:-14px;
+  background:conic-gradient(from 0deg, transparent 0 74%, rgba(255,180,84,.85) 93%, transparent 100%);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  animation:spin 11s linear infinite;
+}
+.r2{
+  inset:-27px;border:1px dashed rgba(176,128,90,.35);
+  animation:spin 30s linear infinite reverse;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tube.active .r1{animation-duration:1.1s}
+.tube.active .r2{animation-duration:5s}
+
+.digit{
+  font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:clamp(5.4rem,26vw,8.5rem);font-weight:700;line-height:1;
+  color:var(--amber);
+  text-shadow:0 0 14px rgba(255,180,84,.85),0 0 44px rgba(255,140,60,.5),0 0 110px rgba(255,120,40,.3);
+  user-select:none;
+}
+.digit.flicker{
+  color:#d98a3e;
+  text-shadow:0 0 10px rgba(255,160,70,.6),0 0 30px rgba(230,120,50,.35);
+}
+.digit.dark{opacity:0 !important;transition:opacity .18s}
+.digit.reveal{
+  animation:pop .8s cubic-bezier(.2,1.4,.3,1) forwards, afterglow 3s ease-in-out 1.4s infinite;
+  color:var(--amber-hi);
+  text-shadow:0 0 18px rgba(255,215,150,.95),0 0 60px rgba(255,160,70,.6),0 0 140px rgba(255,120,40,.4);
+}
+@keyframes pop{
+  0%{transform:scale(.3);filter:blur(14px) brightness(3);opacity:0}
+  30%{opacity:1}
+  55%{transform:scale(1.14);filter:blur(0) brightness(1.9)}
+  100%{transform:scale(1);filter:brightness(1)}
+}
+@keyframes afterglow{0%,100%{opacity:1}50%{opacity:.88}}
+
+.range-label{
+  position:absolute;bottom:15%;left:0;right:0;
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
+  color:var(--copper);pointer-events:none;
+}
+.wave{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  border:2px solid rgba(255,200,120,.9);
+  animation:waveout 1.05s ease-out forwards;
+}
+@keyframes waveout{from{transform:scale(.42);opacity:.9}to{transform:scale(2);opacity:0}}
+
+/* ---------- status / progress ---------- */
+.status-row{
+  display:flex;align-items:center;justify-content:center;gap:.55rem;
+  margin:1.9rem 0 .8rem;min-height:1.3rem;
+}
+.lamp{
+  width:8px;height:8px;border-radius:50%;background:#3a4053;flex:none;
+  transition:background .3s, box-shadow .3s;
+}
+.status-row.live .lamp{background:var(--amber);box-shadow:0 0 8px var(--amber);animation:blink 1s steps(2) infinite}
+.status-row.lock .lamp{background:var(--amber-hi);box-shadow:0 0 10px var(--amber-hi);animation:none}
+@keyframes blink{50%{opacity:.3}}
+.status{font-family:var(--mono);font-size:.78rem;letter-spacing:.28em;color:var(--dim)}
+.status-row.lock .status{color:var(--amber-hi)}
+
+.progress{
+  width:min(76vw,330px);height:3px;margin:0 auto 1.8rem;
+  background:#1c2130;border-radius:2px;overflow:hidden;
+}
+.bar{width:0;height:100%;background:linear-gradient(90deg,var(--copper),var(--amber));}
+
+/* ---------- controls ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:.9rem;
+}
+.max-ctl{
+  display:flex;align-items:center;gap:.5rem;
+  font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;color:var(--dim);
+}
+.max-ctl input{
+  width:4.4rem;padding:.55rem .5rem;text-align:center;
+  font-family:var(--mono);font-size:1rem;font-variant-numeric:tabular-nums;
+  background:var(--panel);color:var(--text);
+  border:1px solid var(--line);border-radius:8px;
+}
+.max-ctl input:focus-visible{outline:none;border-color:var(--amber)}
+button{
+  font-family:var(--sans);font-size:.95rem;cursor:pointer;
+  border-radius:8px;padding:.68rem 1.6rem;border:1px solid transparent;
+  transition:filter .15s, background .2s, color .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+#drawBtn{
+  background:linear-gradient(180deg,#ffc06a,#e2884a);
+  color:#180f06;font-weight:700;letter-spacing:.12em;
+  box-shadow:0 0 22px rgba(255,170,80,.22);
+}
+#drawBtn:hover{filter:brightness(1.1)}
+#drawBtn.skip{
+  background:transparent;border-color:#4b4231;color:#c9b8a4;
+  box-shadow:none;font-weight:500;
+}
+#soundBtn{
+  background:transparent;border-color:var(--line);color:var(--dim);
+  font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;padding:.68rem 1rem;
+}
+#soundBtn[aria-pressed="true"]{color:var(--amber);border-color:#3c3222}
+
+/* ---------- log ---------- */
+.log{margin-top:3.4rem}
+.log h2{
+  font-family:var(--mono);font-size:.72rem;font-weight:400;
+  letter-spacing:.34em;color:var(--copper);text-transform:uppercase;
+  display:flex;align-items:baseline;gap:.8rem;margin:0 0 1rem;
+}
+.log h2::after{content:'';flex:1;height:1px;background:var(--line)}
+#count{color:var(--dim);letter-spacing:.1em}
+.empty{font-size:.85rem;color:var(--dim);text-align:center;padding:1.4rem 0}
+#hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
+#hist li{
+  display:grid;align-items:center;gap:.35rem 1rem;
+  grid-template-columns:max-content max-content 1fr max-content max-content;
+  grid-template-areas:"num time memo done del";
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.65rem 1rem;
+  transition:opacity .25s;
+  animation:slidein .4s ease-out;
+}
+@keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.h-numwrap{grid-area:num;display:flex;align-items:baseline;gap:.45rem}
+.h-num{
+  font-family:var(--mono);font-variant-numeric:tabular-nums;
+  font-size:1.55rem;font-weight:700;color:var(--amber);
+  min-width:2ch;text-align:right;
+  text-shadow:0 0 10px rgba(255,180,84,.35);
+}
+.h-range{font-family:var(--mono);font-size:.68rem;color:var(--dim)}
+.h-time{grid-area:time;font-family:var(--mono);font-size:.75rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.h-memo{
+  grid-area:memo;width:100%;min-width:6rem;
+  background:transparent;border:none;border-bottom:1px solid #2a3040;
+  color:var(--text);font-family:var(--sans);font-size:.88rem;
+  padding:.25rem .1rem;
+}
+.h-memo:focus-visible{outline:none;border-bottom-color:var(--amber)}
+.h-memo::placeholder{color:#4c5266}
+.h-done{
+  grid-area:done;display:flex;align-items:center;gap:.4rem;
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;color:var(--dim);
+  cursor:pointer;user-select:none;
+}
+.h-done input{accent-color:var(--amber);width:15px;height:15px;cursor:pointer}
+#hist li.done{opacity:.42}
+#hist li.done .h-memo{text-decoration:line-through}
+#hist li.removing{opacity:0;transform:translateX(14px);transition:opacity .25s,transform .25s}
+.h-del{
+  grid-area:del;
+  background:transparent;border:none;border-radius:6px;
+  padding:.2rem .45rem;line-height:1;cursor:pointer;
+  font-family:var(--mono);font-size:1rem;color:#4c5266;
+  transition:color .15s;
+}
+.h-del:hover{color:#e2543e}
+@media(max-width:600px){
+  #hist li{
+    grid-template-columns:max-content 1fr max-content max-content;
+    grid-template-areas:"num time done del" "memo memo memo memo";
+  }
+}
+
+footer{
+  margin-top:3rem;text-align:center;
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;color:#4c5266;
+}
+
+/* ---------- flash ---------- */
+#flash{
+  position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 38%, rgba(255,235,200,.95) 0%, rgba(255,180,84,.35) 40%, transparent 75%);
+}
+#flash.on{animation:flashout .55s ease-out}
+@keyframes flashout{0%{opacity:1}100%{opacity:0}}
+
+@media (prefers-reduced-motion: reduce){
+  .r1,.r2,.tube.active .r1,.tube.active .r2{animation:none}
+  .digit.reveal{animation:none;opacity:1}
+  #hist li{animation:none}
+}
+</style>
+
+<canvas id="fx"></canvas>
+<main>
+  <header class="masthead">
+    <p class="eyebrow">Random Number Draw — 型式 RS-15</p>
+    <h1>乱数抽選機</h1>
+  </header>
+
+  <section class="machine">
+    <div class="tube" id="tube" title="抽選中はクリックでスキップ">
+      <span class="ring r1"></span>
+      <span class="ring r2"></span>
+      <div class="digit" id="digit">&#8211;</div>
+      <div class="range-label" id="rangeLabel">1 &#8212; 15</div>
+    </div>
+
+    <div class="status-row" id="statusRow">
+      <span class="lamp"></span>
+      <span class="status" id="status">待機中</span>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+
+    <div class="controls">
+      <label class="max-ctl">1 〜 <input type="number" id="max" min="2" max="100" value="15" inputmode="numeric"> の整数</label>
+      <button id="drawBtn">抽選開始</button>
+      <button id="soundBtn" aria-pressed="true" aria-label="効果音の切り替え">&#9835; ON</button>
+    </div>
+  </section>
+
+  <section class="log">
+    <h2>Log ── 記録 <span id="count"></span></h2>
+    <p class="empty" id="empty">まだ記録はありません。抽選するとここに並びます。</p>
+    <ul id="hist"></ul>
+  </section>
+
+  <footer>データは保存されません ── リロードで消えます</footer>
+</main>
+<div id="flash"></div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const tube=$('tube'),digit=$('digit'),rangeLabel=$('rangeLabel'),
+      statusRow=$('statusRow'),statusEl=$('status'),bar=$('bar'),
+      maxInput=$('max'),drawBtn=$('drawBtn'),soundBtn=$('soundBtn'),
+      hist=$('hist'),empty=$('empty'),countEl=$('count'),flashEl=$('flash');
+
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CHARGE=REDUCED?300:1600, BLACKOUT=REDUCED?250:650;
+
+let phase='idle', drawing=false, skip=false, skipRes=null, soundOn=true;
+
+/* ============ 効果音 (WebAudio) ============ */
+let AC=null, humNodes=null;
+function actx(){
+  if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==='suspended') AC.resume();
+  return AC;
+}
+function startHum(){
+  if(!soundOn) return;
+  const c=actx(),o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(46,c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(120,c.currentTime+8);
+  f.type='lowpass';f.frequency.value=300;
+  g.gain.setValueAtTime(0.0001,c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.05,c.currentTime+1.2);
+  o.connect(f);f.connect(g);g.connect(c.destination);
+  o.start();
+  humNodes={o,g};
+}
+function stopHum(){
+  if(!humNodes) return;
+  const c=AC,{o,g}=humNodes;
+  g.gain.cancelScheduledValues(c.currentTime);
+  g.gain.setValueAtTime(Math.max(g.gain.value,0.0001),c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.15);
+  o.stop(c.currentTime+0.2);
+  humNodes=null;
+}
+function tickSound(){
+  if(!soundOn) return;
+  const c=actx(),o=c.createOscillator(),g=c.createGain();
+  o.type='square';o.frequency.value=900+Math.random()*900;
+  g.gain.setValueAtTime(0.035,c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.05);
+  o.connect(g);g.connect(c.destination);
+  o.start();o.stop(c.currentTime+0.06);
+}
+function boomSound(){
+  if(!soundOn) return;
+  const c=actx();
+  const o=c.createOscillator(),g=c.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(150,c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(40,c.currentTime+0.4);
+  g.gain.setValueAtTime(0.4,c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.5);
+  o.connect(g);g.connect(c.destination);
+  o.start();o.stop(c.currentTime+0.55);
+  [523.25,659.25,783.99].forEach((fq,i)=>{
+    const o2=c.createOscillator(),g2=c.createGain(),t0=c.currentTime+0.05+i*0.06;
+    o2.type='triangle';o2.frequency.value=fq;
+    g2.gain.setValueAtTime(0.0001,t0);
+    g2.gain.exponentialRampToValueAtTime(0.09,t0+0.03);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t0+1.1);
+    o2.connect(g2);g2.connect(c.destination);
+    o2.start(t0);o2.stop(t0+1.2);
+  });
+}
+soundBtn.addEventListener('click',()=>{
+  soundOn=!soundOn;
+  soundBtn.setAttribute('aria-pressed',String(soundOn));
+  soundBtn.innerHTML=soundOn?'&#9835; ON':'&#9835; OFF';
+  if(!soundOn) stopHum();
+});
+
+/* ============ パーティクル ============ */
+const cv=$('fx'),cx=cv.getContext('2d');
+let W,H;
+function resize(){
+  const d=Math.min(devicePixelRatio||1,2);
+  W=innerWidth;H=innerHeight;
+  cv.width=W*d;cv.height=H*d;
+  cx.setTransform(d,0,0,d,0,0);
+}
+addEventListener('resize',resize);resize();
+
+const EMBER=['#ffb454','#ffd9a0','#e2884a','#b0805a'];
+const BURSTC=['#fff3dd','#ffd9a0','#ffb454','#ff8a3d','#b0805a'];
+const parts=[];
+for(let i=0;i<(REDUCED?24:70);i++){
+  parts.push({m:'a',x:Math.random()*W,y:Math.random()*H,
+    vx:(Math.random()-.5)*.15,vy:-.1-Math.random()*.25,
+    r:.6+Math.random()*1.6,tw:Math.random()*6.28,
+    c:EMBER[Math.random()*EMBER.length|0]});
+}
+function burst(x,y){
+  const n=REDUCED?40:130;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.283,s=1.5+Math.random()*7;
+    parts.push({m:'b',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,
+      r:.8+Math.random()*2.4,life:1,dec:.008+Math.random()*.02,
+      c:BURSTC[Math.random()*BURSTC.length|0]});
+  }
+}
+function frame(){
+  requestAnimationFrame(frame);
+  cx.clearRect(0,0,W,H);
+  const rc=tube.getBoundingClientRect();
+  const tx=rc.left+rc.width/2, ty=rc.top+rc.height/2;
+  const attract=(phase==='charging'||phase==='spinning');
+  cx.globalCompositeOperation='lighter';
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];
+    if(p.m==='b'){
+      p.vx*=.985;p.vy=p.vy*.985+.05;
+      p.x+=p.vx;p.y+=p.vy;p.life-=p.dec;
+      if(p.life<=0){parts.splice(i,1);continue;}
+      cx.globalAlpha=Math.max(p.life,0);
+    }else{
+      p.tw+=.03;
+      if(attract){
+        const dx=tx-p.x,dy=ty-p.y,d=Math.hypot(dx,dy)||1;
+        p.vx+=dx/d*.06;p.vy+=dy/d*.06;
+        p.vx*=.97;p.vy*=.97;
+        if(d<rc.width*.18){p.x=Math.random()*W;p.y=H+8;p.vx=0;p.vy=-.2;}
+      }else{
+        p.vx+=Math.sin(p.tw)*.002;
+        p.vx*=.995;p.vy+=(-.18-p.vy)*.01;
+      }
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.y<-10){p.y=H+8;p.x=Math.random()*W;}
+      if(p.x<-10)p.x=W+8;else if(p.x>W+10)p.x=-8;
+      cx.globalAlpha=(attract?.5:.26)+.2*Math.sin(p.tw);
+    }
+    cx.fillStyle=p.c;
+    cx.beginPath();cx.arc(p.x,p.y,p.r,0,6.283);cx.fill();
+  }
+  cx.globalAlpha=1;
+}
+requestAnimationFrame(frame);
+
+/* ============ 抽選 ============ */
+function clampMax(){
+  let v=parseInt(maxInput.value,10);
+  if(!Number.isFinite(v)) v=15;
+  v=Math.min(100,Math.max(2,v));
+  maxInput.value=v;
+  rangeLabel.innerHTML=`1 &#8212; ${v}`;
+  return v;
+}
+maxInput.addEventListener('change',clampMax);
+
+function wait(ms){
+  return new Promise(r=>{
+    const id=setTimeout(()=>{skipRes=null;r();},ms);
+    skipRes=()=>{clearTimeout(id);skipRes=null;r();};
+  });
+}
+function doSkip(){
+  if(!drawing||phase==='burst')return;
+  skip=true;
+  if(skipRes)skipRes();
+}
+tube.addEventListener('click',doSkip);
+drawBtn.addEventListener('click',()=>{drawing?doSkip():runDraw();});
+
+function makeDelays(){
+  if(REDUCED) return [80,120,180,260,360];
+  const a=[];let d=42,sum=0;
+  while(sum<7300){a.push(d);sum+=d;d*=1.09;}
+  return a;
+}
+function setStatus(txt,mode){
+  statusEl.textContent=txt;
+  statusRow.classList.toggle('live',mode==='live');
+  statusRow.classList.toggle('lock',mode==='lock');
+}
+function startBar(total){
+  bar.style.transition='none';bar.style.width='0';
+  void bar.offsetWidth;
+  bar.style.transition=`width ${total}ms linear`;
+  bar.style.width='100%';
+}
+function jitter(){
+  if(REDUCED)return;
+  digit.style.transform=`translate(${(Math.random()-.5)*6}px,${(Math.random()-.5)*4}px)`;
+  digit.style.opacity=(.5+Math.random()*.4).toFixed(2);
+}
+function waves(){
+  for(let i=0;i<3;i++){
+    const w=document.createElement('span');
+    w.className='wave';
+    w.style.animationDelay=(i*0.12)+'s';
+    tube.appendChild(w);
+    setTimeout(()=>w.remove(),1500);
+  }
+}
+
+async function runDraw(){
+  if(drawing)return;
+  drawing=true;skip=false;
+  const max=clampMax();
+  const result=1+Math.floor(Math.random()*max);
+
+  maxInput.disabled=true;
+  drawBtn.textContent='スキップ ▸▸';
+  drawBtn.classList.add('skip');
+  digit.classList.remove('reveal','dark');
+  digit.classList.add('flicker');
+  tube.classList.add('active');
+
+  const delays=makeDelays();
+  startBar(CHARGE+delays.reduce((a,b)=>a+b,0)+BLACKOUT);
+
+  phase='charging';
+  setStatus('陰極加熱中','live');
+  startHum();
+  await wait(CHARGE);
+
+  phase='spinning';
+  setStatus('走査中','live');
+  let last=-1,elapsed=0,converging=false;
+  for(const d of delays){
+    if(skip)break;
+    let v,tries=0;
+    do{v=1+Math.floor(Math.random()*max);}while((v===last||v===result)&&++tries<12);
+    last=v;
+    digit.textContent=v;
+    jitter();
+    tickSound();
+    elapsed+=d;
+    if(!converging&&elapsed>4500){converging=true;setStatus('収束中','live');}
+    await wait(d);
+  }
+
+  stopHum();
+  phase='blackout';
+  setStatus('');
+  digit.classList.add('dark');
+  await wait(skip?150:BLACKOUT);
+
+  /* ---- 確定 ---- */
+  phase='burst';
+  digit.style.transform='';digit.style.opacity='';
+  digit.classList.remove('flicker','dark');
+  digit.textContent=result;
+  void digit.offsetWidth;
+  digit.classList.add('reveal');
+  flashEl.classList.remove('on');void flashEl.offsetWidth;flashEl.classList.add('on');
+  if(!REDUCED)waves();
+  const rc=tube.getBoundingClientRect();
+  burst(rc.left+rc.width/2,rc.top+rc.height/2);
+  boomSound();
+  setStatus('確定','lock');
+  bar.style.transition='width 200ms ease-out';bar.style.width='100%';
+  tube.classList.remove('active');
+  addHistory(result,max);
+
+  setTimeout(()=>{
+    phase='idle';drawing=false;
+    drawBtn.textContent='抽選開始';
+    drawBtn.classList.remove('skip');
+    maxInput.disabled=false;
+    setStatus('待機中');
+  },1100);
+}
+
+/* ============ 記録 ============ */
+function updateCount(){
+  const n=hist.children.length;
+  countEl.textContent=n?`${n}件`:'';
+  empty.style.display=n?'none':'';
+}
+function addHistory(n,max){
+  const li=document.createElement('li');
+  const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  li.innerHTML=
+    `<span class="h-numwrap"><span class="h-num">${n}</span><span class="h-range">/ 1–${max}</span></span>`+
+    `<span class="h-time">${t}</span>`+
+    `<input class="h-memo" type="text" placeholder="メモ" aria-label="この数字へのメモ">`+
+    `<label class="h-done"><input type="checkbox">完了</label>`+
+    `<button class="h-del" type="button" title="この記録を削除" aria-label="この記録を削除">&#10005;</button>`;
+  li.querySelector('input[type=checkbox]').addEventListener('change',e=>{
+    li.classList.toggle('done',e.target.checked);
+  });
+  li.querySelector('.h-del').addEventListener('click',()=>{
+    li.classList.add('removing');
+    setTimeout(()=>{li.remove();updateCount();},250);
+  });
+  hist.prepend(li);
+  updateCount();
+}
+
+clampMax();
+</script>
+</body>
+</html>
