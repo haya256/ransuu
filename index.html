@@ -504,15 +504,20 @@ function clampMax(){
   if(!Number.isFinite(v)) v=15;
   v=Math.min(100,Math.max(2,v));
   maxInput.value=v;
-  rangeLabel.textContent='';
-  rangeLabel.classList.remove('result');
   return v;
 }
-/* 上限の変更は上部のビッグ数字にもリアルタイム反映する(操作中は無効なので抽選中には走らない) */
+function hideRangeLabel(){
+  rangeLabel.textContent='';
+  rangeLabel.classList.remove('result');
+}
+/* 上限の変更はチューブ内の「/ 上限」(分母)にリアルタイム反映する。前回の結果は別の上限での値なので
+   ビッグ数字は「–」に戻す(操作中は無効なので抽選中には走らない) */
 function syncDigit(){
   const v=clampMax();
-  digit.textContent=v;
+  digit.textContent='\u2013';
   digit.classList.remove('reveal');
+  rangeLabel.textContent=`/ ${v}`;
+  rangeLabel.classList.add('result');
   return v;
 }
 maxInput.addEventListener('change',syncDigit);
@@ -615,6 +620,7 @@ async function runDraw(){
   if(drawing)return;
   drawing=true;cancelled=false;
   const max=clampMax();
+  hideRangeLabel();
   const result=1+Math.floor(Math.random()*max);
 
   setControlsDisabled(true);
@@ -728,7 +734,7 @@ $('tidyLogBtn').addEventListener('click',()=>{
   setTimeout(()=>{targets.forEach(li=>li.remove());updateCount();},250);
 });
 
-clampMax();
+syncDigit();
 
 /* 最終更新: サーバーのLast-Modifiedヘッダ由来なのでデプロイ反映確認に使える */
 const lm=new Date(document.lastModified);
