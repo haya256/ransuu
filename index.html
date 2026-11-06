@@ -230,6 +230,14 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   animation:slidein .4s ease-out;
 }
 @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+/* ドラッグで並び替え(マウス/ペン)。メモ欄・完了・削除以外の部分をつかむ */
+#hist li{position:relative;user-select:none;-webkit-user-select:none}
+@media (pointer:fine){#hist li{cursor:grab}}
+#hist li.dragging{
+  z-index:5;background:#151a26;border-color:#5a4426;
+  box-shadow:0 12px 30px rgba(0,0,0,.6),0 0 20px rgba(255,180,84,.16);
+}
+body.sorting,body.sorting *{cursor:grabbing !important}
 .h-numwrap{
   grid-area:num;display:flex;align-items:baseline;gap:.45rem;
   overflow:hidden;white-space:nowrap;
@@ -247,6 +255,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   background:transparent;border:none;border-bottom:1px solid #2a3040;
   color:var(--text);font-family:var(--sans);font-size:.88rem;
   padding:.25rem .1rem;
+  user-select:text;-webkit-user-select:text;
 }
 .h-memo:focus-visible{outline:none;border-bottom-color:var(--amber)}
 .h-memo::placeholder{color:#4c5266}
@@ -733,6 +742,89 @@ $('tidyLogBtn').addEventListener('click',()=>{
   targets.forEach(li=>li.classList.add('removing'));
   setTimeout(()=>{targets.forEach(li=>li.remove());updateCount();},250);
 });
+
+/* ============ 並び替え(ドラッグ&ドロップ) ============ */
+/* つかんだ行はポインタに追従させ、その中心が他の行の中心を越えたらDOM上で入れ替える。
+   押しのけられた行はFLIP(移動前の位置から戻す)でなめらかに動かす。
+   タッチはスクロールと競合するので対象外(マウス/ペンのみ) */
+const DRAG_START=4, EDGE=48;
+let drag=null;
+hist.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'||e.button!==0||drag)return;
+  const li=e.target.closest('li');
+  if(!li||li.classList.contains('removing')||e.target.closest('input,label,button'))return;
+  drag={li,id:e.pointerId,startY:e.clientY+scrollY,startTop:li.offsetTop,clientY:e.clientY,active:false,raf:0};
+});
+addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  drag.clientY=e.clientY;
+  if(!drag.active){
+    if(Math.abs(e.clientY+scrollY-drag.startY)<DRAG_START)return;
+    beginDrag();
+  }
+  dragUpdate();
+});
+addEventListener('pointerup',e=>{if(drag&&e.pointerId===drag.id)endDrag();});
+addEventListener('pointercancel',e=>{if(drag&&e.pointerId===drag.id)endDrag();});
+
+function beginDrag(){
+  const li=drag.li;
+  drag.active=true;
+  try{li.setPointerCapture(drag.id);}catch(_){}
+  li.style.animation='none'; /* DOM移動のたびにslideinが再生されないように */
+  li.style.transition='none';
+  li.classList.add('dragging');
+  document.body.classList.add('sorting');
+  autoScroll();
+}
+function dragUpdate(){
+  const li=drag.li;
+  const top=drag.startTop+(drag.clientY+scrollY-drag.startY);
+  const center=top+li.offsetHeight/2;
+  const others=[...hist.children].filter(x=>x!==li&&!x.classList.contains('removing'));
+  const next=others.find(x=>x.offsetTop+x.offsetHeight/2>center)||null;
+  if(li.nextElementSibling!==next)flipMove(li,next,others);
+  li.style.transform=`translateY(${top-li.offsetTop}px) scale(1.02)`;
+}
+function flipMove(li,next,others){
+  const before=others.map(x=>x.getBoundingClientRect().top);
+  hist.insertBefore(li,next);
+  others.forEach((x,i)=>{
+    x.style.transition='none';
+    x.style.transform='';
+    const dy=before[i]-x.getBoundingClientRect().top;
+    if(!dy){x.style.transition='';return;}
+    x.style.transform=`translateY(${dy}px)`;
+    void x.offsetWidth;
+    x.style.transition='transform .22s cubic-bezier(.2,.8,.3,1)';
+    x.style.transform='';
+    clearTimeout(x._flip);
+    /* インライン transition を残すと .removing 等のCSS側 transition を潰すので戻す */
+    x._flip=setTimeout(()=>{x.style.transition='';},240);
+  });
+}
+/* 画面の上下端に近づけたら自動スクロール */
+function autoScroll(){
+  if(!drag||!drag.active)return;
+  const y=drag.clientY;
+  const v=y<EDGE?-(EDGE-y):y>innerHeight-EDGE?y-(innerHeight-EDGE):0;
+  if(v){scrollBy(0,Math.max(-16,Math.min(16,v/3)));dragUpdate();}
+  drag.raf=requestAnimationFrame(autoScroll);
+}
+function endDrag(){
+  const {li,active,raf}=drag;
+  drag=null;
+  cancelAnimationFrame(raf);
+  if(!active)return;
+  document.body.classList.remove('sorting');
+  li.style.transition='transform .2s ease-out';
+  li.style.transform='';
+  setTimeout(()=>{
+    if(drag&&drag.li===li)return;
+    li.classList.remove('dragging');
+    li.style.transition='';
+  },200);
+}
 
 syncDigit();
 
