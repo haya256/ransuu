@@ -165,6 +165,15 @@ h1{
 .max-ctl select:focus-visible{outline:none;border-color:var(--amber)}
 .max-ctl select:disabled{opacity:.5;cursor:default}
 .max-ctl option{background:var(--panel);color:var(--text)}
+.max-ctl .step{
+  width:1.9rem;height:1.9rem;padding:0;
+  display:grid;place-items:center;
+  font-family:var(--mono);font-size:1rem;line-height:1;
+  background:var(--panel);color:var(--text);
+  border:1px solid var(--line);border-radius:8px;
+}
+.max-ctl .step:hover{filter:brightness(1.2)}
+.max-ctl .step:disabled{opacity:.5;cursor:default;filter:none}
 button{
   font-family:var(--sans);font-size:.95rem;cursor:pointer;
   border-radius:8px;padding:.68rem 1.6rem;border:1px solid transparent;
@@ -182,12 +191,6 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   background:transparent;border-color:#5c3a31;color:#d9a293;
   box-shadow:none;font-weight:500;
 }
-#soundBtn{
-  background:transparent;border-color:var(--line);color:var(--dim);
-  font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;padding:.68rem 1rem;
-}
-#soundBtn[aria-pressed="true"]{color:var(--amber);border-color:#3c3222}
-
 /* ---------- log ---------- */
 .log{margin-top:3.4rem}
 .log h2{
@@ -304,9 +307,12 @@ footer{
     <div class="progress"><div class="bar" id="bar"></div></div>
 
     <div class="controls">
-      <label class="max-ctl">1 〜 <select id="max" title="ホイールで増減（Shift で ±10）"></select> の整数</label>
+      <label class="max-ctl">1 〜
+        <button class="step" id="maxDown" type="button" aria-label="上限を1減らす">&#8722;</button>
+        <select id="max" title="ホイールで増減（Shift で ±10）"></select>
+        <button class="step" id="maxUp" type="button" aria-label="上限を1増やす">&#43;</button>
+        の整数</label>
       <button id="drawBtn">抽選開始</button>
-      <button id="soundBtn" aria-pressed="true" aria-label="効果音の切り替え">&#9835; ON</button>
     </div>
   </section>
 
@@ -326,14 +332,14 @@ footer{
 const $=id=>document.getElementById(id);
 const tube=$('tube'),digit=$('digit'),rangeLabel=$('rangeLabel'),
       statusRow=$('statusRow'),statusEl=$('status'),bar=$('bar'),
-      maxInput=$('max'),drawBtn=$('drawBtn'),soundBtn=$('soundBtn'),
+      maxInput=$('max'),maxDown=$('maxDown'),maxUp=$('maxUp'),drawBtn=$('drawBtn'),
       hist=$('hist'),empty=$('empty'),countEl=$('count'),flashEl=$('flash'),
       wavesBox=$('waves');
 
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CHARGE=REDUCED?300:1600, BLACKOUT=REDUCED?250:650;
 
-let phase='idle', drawing=false, cancelled=false, waitRes=null, soundOn=true;
+let phase='idle', drawing=false, cancelled=false, waitRes=null;
 
 /* ============ 効果音 (WebAudio) ============ */
 let AC=null, humNodes=null;
@@ -343,7 +349,6 @@ function actx(){
   return AC;
 }
 function startHum(){
-  if(!soundOn) return;
   const c=actx(),o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter();
   o.type='sawtooth';
   o.frequency.setValueAtTime(46,c.currentTime);
@@ -365,7 +370,6 @@ function stopHum(){
   humNodes=null;
 }
 function tickSound(){
-  if(!soundOn) return;
   const c=actx(),o=c.createOscillator(),g=c.createGain();
   o.type='square';o.frequency.value=900+Math.random()*900;
   g.gain.setValueAtTime(0.035,c.currentTime);
@@ -374,7 +378,6 @@ function tickSound(){
   o.start();o.stop(c.currentTime+0.06);
 }
 function boomSound(){
-  if(!soundOn) return;
   const c=actx();
   const o=c.createOscillator(),g=c.createGain();
   o.type='sine';
@@ -410,13 +413,6 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible') checkAudioAlive();
 });
 window.addEventListener('pageshow',()=>checkAudioAlive());
-
-soundBtn.addEventListener('click',()=>{
-  soundOn=!soundOn;
-  soundBtn.setAttribute('aria-pressed',String(soundOn));
-  soundBtn.innerHTML=soundOn?'&#9835; ON':'&#9835; OFF';
-  if(!soundOn) stopHum();
-});
 
 /* ============ パーティクル ============ */
 const cv=$('fx'),cx=cv.getContext('2d');
@@ -511,6 +507,18 @@ maxInput.addEventListener('wheel',e=>{
   maxInput.value=Math.min(100,Math.max(2,v+dir*step));
   if(clampMax()!==v)tickSound();
 },{passive:false});
+function stepMax(delta){
+  if(maxInput.disabled)return;
+  const v=parseInt(maxInput.value,10);
+  maxInput.value=Math.min(100,Math.max(2,(Number.isFinite(v)?v:15)+delta));
+  clampMax();
+  tickSound();
+}
+maxDown.addEventListener('click',()=>stepMax(-1));
+maxUp.addEventListener('click',()=>stepMax(1));
+function setControlsDisabled(v){
+  maxInput.disabled=v;maxDown.disabled=v;maxUp.disabled=v;
+}
 
 function wait(ms){
   return new Promise(r=>{
@@ -571,7 +579,7 @@ function abortDraw(){
     drawing=false;
     drawBtn.textContent='抽選開始';
     drawBtn.classList.remove('cancel');
-    maxInput.disabled=false;
+    setControlsDisabled(false);
     setStatus('待機中');
   },700);
 }
@@ -582,7 +590,7 @@ async function runDraw(){
   const max=clampMax();
   const result=1+Math.floor(Math.random()*max);
 
-  maxInput.disabled=true;
+  setControlsDisabled(true);
   drawBtn.textContent='キャンセル';
   drawBtn.classList.add('cancel');
   digit.classList.remove('reveal','dark');
@@ -643,7 +651,7 @@ async function runDraw(){
     phase='idle';drawing=false;
     drawBtn.textContent='抽選開始';
     drawBtn.classList.remove('cancel');
-    maxInput.disabled=false;
+    setControlsDisabled(false);
     setStatus('待機中');
   },1100);
 }
