@@ -200,13 +200,13 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 }
 .log h2::after{content:'';flex:1;height:1px;background:var(--line)}
 #count{color:var(--dim);letter-spacing:.1em}
-#addLogBtn{
+#addLogBtn,#tidyLogBtn{
   font-family:var(--mono);font-size:.64rem;font-weight:400;letter-spacing:.05em;
   text-transform:none;background:transparent;color:var(--dim);
   border:1px solid var(--line);border-radius:6px;padding:.3rem .65rem;
   white-space:nowrap;transition:color .15s,border-color .15s;
 }
-#addLogBtn:hover{color:var(--amber);border-color:#3c3222}
+#addLogBtn:hover,#tidyLogBtn:hover{color:var(--amber);border-color:#3c3222}
 .empty{font-size:.85rem;color:var(--dim);text-align:center;padding:1.4rem 0}
 #hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
 #hist li{
@@ -316,7 +316,7 @@ footer{
   </section>
 
   <section class="log">
-    <h2>Log ── 記録 <span id="count"></span><button id="addLogBtn" type="button">+ メモ行を追加</button></h2>
+    <h2>Log ── 記録 <span id="count"></span><button id="addLogBtn" type="button">+ メモ行を追加</button><button id="tidyLogBtn" type="button" title="メモが空の行をまとめて削除します（抽選結果の行も含む）">整理する</button></h2>
     <p class="empty" id="empty">まだ記録はありません。抽選するとここに並びます。</p>
     <ul id="hist"></ul>
   </section>
@@ -701,6 +701,15 @@ function addHistory(n,max){
 
 $('addLogBtn').addEventListener('click',()=>{
   addHistory(null,null).focus();
+});
+
+/* メモが空(空白のみ含む)の行を数字の有無に関係なく一括削除 */
+$('tidyLogBtn').addEventListener('click',()=>{
+  const targets=[...hist.children].filter(li=>
+    !li.classList.contains('removing')&&li.querySelector('.h-memo').value.trim()==='');
+  if(!targets.length)return;
+  targets.forEach(li=>li.classList.add('removing'));
+  setTimeout(()=>{targets.forEach(li=>li.remove());updateCount();},250);
 });
 
 clampMax();
