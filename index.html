@@ -381,6 +381,23 @@ function boomSound(){
     o2.start(t0);o2.stop(t0+1.2);
   });
 }
+/* スリープ復帰後、stateがrunningでも実際は無音のままになる(iOSのゾンビ化)対策:
+   復帰時にcurrentTimeが進むかで生死判定し、死んでいたら破棄する。
+   作り直しはユーザージェスチャーが必要なため、次のタップ時のactx()に任せる */
+async function checkAudioAlive(){
+  if(!AC) return;
+  if(AC.state!=='running'){ try{await AC.resume();}catch(e){} }
+  const t0=AC.currentTime;
+  await new Promise(r=>setTimeout(r,150));
+  if(AC && AC.state==='running' && AC.currentTime>t0) return;
+  try{AC.close();}catch(e){}
+  AC=null; humNodes=null;
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') checkAudioAlive();
+});
+window.addEventListener('pageshow',()=>checkAudioAlive());
+
 soundBtn.addEventListener('click',()=>{
   soundOn=!soundOn;
   soundBtn.setAttribute('aria-pressed',String(soundOn));
