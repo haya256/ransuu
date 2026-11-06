@@ -165,8 +165,8 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   box-shadow:0 0 22px rgba(255,170,80,.22);
 }
 #drawBtn:hover{filter:brightness(1.1)}
-#drawBtn.skip{
-  background:transparent;border-color:#4b4231;color:#c9b8a4;
+#drawBtn.cancel{
+  background:transparent;border-color:#5c3a31;color:#d9a293;
   box-shadow:none;font-weight:500;
 }
 #soundBtn{
@@ -265,7 +265,7 @@ footer{
   </header>
 
   <section class="machine">
-    <div class="tube" id="tube" title="抽選中はクリックでスキップ">
+    <div class="tube" id="tube">
       <span class="ring r1"></span>
       <span class="ring r2"></span>
       <div class="digit" id="digit">&#8211;</div>
@@ -306,7 +306,7 @@ const tube=$('tube'),digit=$('digit'),rangeLabel=$('rangeLabel'),
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CHARGE=REDUCED?300:1600, BLACKOUT=REDUCED?250:650;
 
-let phase='idle', drawing=false, skip=false, skipRes=null, soundOn=true;
+let phase='idle', drawing=false, cancelled=false, waitRes=null, soundOn=true;
 
 /* ============ 効果音 (WebAudio) ============ */
 let AC=null, humNodes=null;
@@ -470,17 +470,16 @@ maxInput.addEventListener('wheel',e=>{
 
 function wait(ms){
   return new Promise(r=>{
-    const id=setTimeout(()=>{skipRes=null;r();},ms);
-    skipRes=()=>{clearTimeout(id);skipRes=null;r();};
+    const id=setTimeout(()=>{waitRes=null;r();},ms);
+    waitRes=()=>{clearTimeout(id);waitRes=null;r();};
   });
 }
-function doSkip(){
+function doCancel(){
   if(!drawing||phase==='burst')return;
-  skip=true;
-  if(skipRes)skipRes();
+  cancelled=true;
+  if(waitRes)waitRes();
 }
-tube.addEventListener('click',doSkip);
-drawBtn.addEventListener('click',()=>{drawing?doSkip():runDraw();});
+drawBtn.addEventListener('click',()=>{drawing?doCancel():runDraw();});
 
 function makeDelays(){
   if(REDUCED) return [80,120,180,260,360];
@@ -514,15 +513,33 @@ function waves(){
   }
 }
 
+function abortDraw(){
+  stopHum();
+  phase='idle';
+  digit.style.transform='';digit.style.opacity='';
+  digit.classList.remove('flicker');
+  digit.classList.add('dark');
+  tube.classList.remove('active');
+  bar.style.transition='width 300ms ease-out';bar.style.width='0';
+  setStatus('中止');
+  setTimeout(()=>{
+    drawing=false;
+    drawBtn.textContent='抽選開始';
+    drawBtn.classList.remove('cancel');
+    maxInput.disabled=false;
+    setStatus('待機中');
+  },700);
+}
+
 async function runDraw(){
   if(drawing)return;
-  drawing=true;skip=false;
+  drawing=true;cancelled=false;
   const max=clampMax();
   const result=1+Math.floor(Math.random()*max);
 
   maxInput.disabled=true;
-  drawBtn.textContent='スキップ ▸▸';
-  drawBtn.classList.add('skip');
+  drawBtn.textContent='キャンセル';
+  drawBtn.classList.add('cancel');
   digit.classList.remove('reveal','dark');
   digit.classList.add('flicker');
   tube.classList.add('active');
@@ -534,12 +551,13 @@ async function runDraw(){
   setStatus('陰極加熱中','live');
   startHum();
   await wait(CHARGE);
+  if(cancelled)return abortDraw();
 
   phase='spinning';
   setStatus('走査中','live');
   let last=-1,elapsed=0,converging=false;
   for(const d of delays){
-    if(skip)break;
+    if(cancelled)break;
     let v,tries=0;
     do{v=1+Math.floor(Math.random()*max);}while((v===last||v===result)&&++tries<12);
     last=v;
@@ -550,12 +568,14 @@ async function runDraw(){
     if(!converging&&elapsed>4500){converging=true;setStatus('収束中','live');}
     await wait(d);
   }
+  if(cancelled)return abortDraw();
 
   stopHum();
   phase='blackout';
   setStatus('');
   digit.classList.add('dark');
-  await wait(skip?150:BLACKOUT);
+  await wait(BLACKOUT);
+  if(cancelled)return abortDraw();
 
   /* ---- 確定 ---- */
   phase='burst';
@@ -577,7 +597,7 @@ async function runDraw(){
   setTimeout(()=>{
     phase='idle';drawing=false;
     drawBtn.textContent='抽選開始';
-    drawBtn.classList.remove('skip');
+    drawBtn.classList.remove('cancel');
     maxInput.disabled=false;
     setStatus('待機中');
   },1100);
