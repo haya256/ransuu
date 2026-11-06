@@ -504,9 +504,12 @@ function syncDigit(){
 }
 maxInput.addEventListener('change',syncDigit);
 maxInput.addEventListener('input',syncDigit);
-/* 上限セレクトと乱数表示(チューブ)のどちらの上でもホイールで上限を増減できる */
+/* ログ領域より上ならどこでも(ボタンの上を除く)ホイールで上限を増減できる */
+const logSection=document.querySelector('.log');
 function wheelMax(e){
   if(maxInput.disabled)return;
+  if(e.target.closest('button'))return;
+  if(e.clientY>=logSection.getBoundingClientRect().top)return;
   e.preventDefault();
   const step=e.shiftKey?10:1;
   const dir=e.deltaY>0?1:-1;
@@ -515,8 +518,7 @@ function wheelMax(e){
   maxInput.value=Math.min(100,Math.max(2,v+dir*step));
   if(syncDigit()!==v)tickSound();
 }
-maxInput.addEventListener('wheel',wheelMax,{passive:false});
-tube.addEventListener('wheel',wheelMax,{passive:false});
+window.addEventListener('wheel',wheelMax,{passive:false});
 function stepMax(delta){
   if(maxInput.disabled)return;
   const v=parseInt(maxInput.value,10);
