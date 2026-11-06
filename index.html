@@ -517,12 +517,11 @@ function syncDigit(){
 }
 maxInput.addEventListener('change',syncDigit);
 maxInput.addEventListener('input',syncDigit);
-/* ログ領域より上ならどこでも(ボタンの上を除く)ホイールで上限を増減できる */
-const logSection=document.querySelector('.log');
+/* プログレスバー(待機中の下の横線)より上ならどこでも、または上限セレクト上でホイールで上限を増減できる */
+const progressEl=document.querySelector('.progress');
 function wheelMax(e){
   if(maxInput.disabled)return;
-  if(e.target.closest('button'))return;
-  if(e.clientY>=logSection.getBoundingClientRect().top)return;
+  if(e.target!==maxInput&&e.clientY>=progressEl.getBoundingClientRect().bottom)return;
   e.preventDefault();
   const step=e.shiftKey?10:1;
   const dir=e.deltaY>0?1:-1;
