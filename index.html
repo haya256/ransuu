@@ -274,7 +274,7 @@ footer{
     <div class="progress"><div class="bar" id="bar"></div></div>
 
     <div class="controls">
-      <label class="max-ctl">1 〜 <input type="number" id="max" min="2" max="100" value="15" inputmode="numeric"> の整数</label>
+      <label class="max-ctl">1 〜 <input type="number" id="max" min="2" max="100" value="15" inputmode="numeric" title="ホイールで増減（Shift で ±10）"> の整数</label>
       <button id="drawBtn">抽選開始</button>
       <button id="soundBtn" aria-pressed="true" aria-label="効果音の切り替え">&#9835; ON</button>
     </div>
@@ -445,6 +445,16 @@ function clampMax(){
   return v;
 }
 maxInput.addEventListener('change',clampMax);
+maxInput.addEventListener('wheel',e=>{
+  if(maxInput.disabled)return;
+  e.preventDefault();
+  const step=e.shiftKey?10:1;
+  const dir=e.deltaY<0?1:-1;
+  let v=parseInt(maxInput.value,10);
+  if(!Number.isFinite(v))v=15;
+  maxInput.value=v+dir*step;
+  if(clampMax()!==v)tickSound();
+},{passive:false});
 
 function wait(ms){
   return new Promise(r=>{
