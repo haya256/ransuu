@@ -502,7 +502,7 @@ function wheelMax(e){
   if(maxInput.disabled)return;
   e.preventDefault();
   const step=e.shiftKey?10:1;
-  const dir=e.deltaY<0?1:-1;
+  const dir=e.deltaY>0?1:-1;
   let v=parseInt(maxInput.value,10);
   if(!Number.isFinite(v))v=15;
   maxInput.value=Math.min(100,Math.max(2,v+dir*step));
