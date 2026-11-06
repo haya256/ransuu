@@ -55,6 +55,14 @@ h1{
   box-shadow:inset 0 0 70px #000, 0 0 0 1px #262b3a, 0 0 90px rgba(255,180,84,.05);
   display:grid;place-items:center;
   -webkit-tap-highlight-color:transparent;
+  /* 離したときはバネで戻る(yが1を超えるベジェで行き過ぎてから収まる) */
+  transition:transform .5s cubic-bezier(.28,2.1,.5,1), box-shadow .35s ease-out;
+}
+/* 押し込み: ガラス玉が奥へ沈む感じ。数字側のtransformと競合しないよう円ごと縮める */
+.tube.pressed{
+  transform:scale(.965);
+  box-shadow:inset 0 0 95px #000, inset 0 6px 22px rgba(0,0,0,.6), 0 0 0 1px #2e3445, 0 0 60px rgba(255,180,84,.09);
+  transition:transform .08s ease-out, box-shadow .08s ease-out;
 }
 .tube::after{ /* glass reflection */
   content:'';position:absolute;top:7%;left:13%;width:34%;height:19%;
@@ -205,13 +213,23 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 #drawBtn{
   background:linear-gradient(180deg,#ffc06a,#e2884a);
   color:#180f06;font-weight:700;letter-spacing:.12em;
-  box-shadow:0 0 22px rgba(255,170,80,.22);
+  box-shadow:0 0 22px rgba(255,170,80,.22), 0 3px 0 #8a4f26;
+  transition:filter .15s, background .2s, color .2s,
+             transform .42s cubic-bezier(.3,2.2,.5,1), box-shadow .3s ease-out;
 }
 #drawBtn:hover{filter:brightness(1.1)}
+/* 押し込み: 下の縁(影)が消えるぶん沈み、光彩も縮む */
+#drawBtn.pressed{
+  transform:translateY(3px) scale(.985);
+  filter:brightness(.86);
+  box-shadow:0 0 9px rgba(255,170,80,.14), 0 0 0 #8a4f26;
+  transition:filter .06s, transform .06s ease-out, box-shadow .06s ease-out;
+}
 #drawBtn.cancel{
   background:transparent;border-color:#5c3a31;color:#d9a293;
   box-shadow:none;font-weight:500;
 }
+#drawBtn.cancel.pressed{box-shadow:none;background:rgba(92,58,49,.25)}
 /* ---------- log ---------- */
 .log{margin-top:3.4rem}
 .log h2{
@@ -315,6 +333,7 @@ footer{
   .digit.reveal{animation:none;opacity:1}
   .range-label.result{animation:none}
   #hist li{animation:none}
+  .tube,.tube.pressed,#drawBtn,#drawBtn.pressed{transition-duration:.08s;transition-timing-function:ease-out}
 }
 </style>
 
@@ -431,6 +450,32 @@ function boomSound(){
     o2.connect(g2);g2.connect(c.destination);
     o2.start(t0);o2.stop(t0+1.2);
   });
+}
+/* 押し込み/離しのクリック音。押す=低く重い「カチッ」、離す=軽く高い「コッ」 */
+let noiseBuf=null;
+function clickSound(down){
+  const c=actx(),t=c.currentTime;
+  if(!noiseBuf){
+    noiseBuf=c.createBuffer(1,Math.floor(c.sampleRate*0.03),c.sampleRate);
+    const d=noiseBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,4);
+  }
+  /* 接点の擦れ: 短いノイズをバンドパスで */
+  const n=c.createBufferSource(),f=c.createBiquadFilter(),ng=c.createGain();
+  n.buffer=noiseBuf;
+  f.type='bandpass';f.frequency.value=down?2200:3600;f.Q.value=1.4;
+  ng.gain.value=down?0.22:0.12;
+  n.connect(f);f.connect(ng);ng.connect(c.destination);
+  n.start(t);
+  /* 筐体の鳴り: ピッチが急降下する短いサイン */
+  const o=c.createOscillator(),g=c.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(down?240:520,t);
+  o.frequency.exponentialRampToValueAtTime(down?90:260,t+0.05);
+  g.gain.setValueAtTime(down?0.22:0.09,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+(down?0.09:0.05));
+  o.connect(g);g.connect(c.destination);
+  o.start(t);o.stop(t+0.1);
 }
 /* スリープ復帰後、stateがrunningでも実際は無音のままになる(iOSのゾンビ化)対策:
    復帰時にcurrentTimeが進むかで生死判定し、死んでいたら破棄する。
@@ -609,6 +654,37 @@ function toggleDraw(){drawing?doCancel():runDraw();}
 drawBtn.addEventListener('click',toggleDraw);
 /* 乱数表示(チューブ)のクリックも抽選開始/キャンセルボタンと同じ動作 */
 tube.addEventListener('click',toggleDraw);
+
+/* 押し込み演出: :active はiOSでdivに効かないため pointer イベントでクラスを付け外し。
+   押したまま外へずらしたら戻す(その場合clickも発火しないので離し音も鳴らさない) */
+function pressable(el){
+  let pid=null;
+  const release=sound=>{
+    if(pid===null)return;
+    pid=null;el.classList.remove('pressed');
+    if(sound)clickSound(false);
+  };
+  el.addEventListener('pointerdown',e=>{
+    if(e.button!==0||pid!==null)return;
+    pid=e.pointerId;
+    el.classList.add('pressed');
+    clickSound(true);
+  });
+  el.addEventListener('pointerup',e=>{if(e.pointerId===pid)release(true);});
+  el.addEventListener('pointerleave',e=>{if(e.pointerId===pid)release(false);});
+  el.addEventListener('pointercancel',e=>{if(e.pointerId===pid)release(false);});
+  /* キーボード(Space/Enter)でも同じ感触に */
+  el.addEventListener('keydown',e=>{
+    if((e.key===' '||e.key==='Enter')&&!e.repeat&&pid===null){
+      pid='key';el.classList.add('pressed');clickSound(true);
+      if(e.key==='Enter')setTimeout(()=>release(true),90);
+    }
+  });
+  el.addEventListener('keyup',e=>{if(e.key===' ')release(true);});
+  el.addEventListener('blur',()=>release(false));
+}
+pressable(drawBtn);
+pressable(tube);
 
 function makeDelays(){
   if(REDUCED) return [80,120,180,260,360];
