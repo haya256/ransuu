@@ -624,7 +624,7 @@ async function runDraw(){
   setStatus('確定','lock');
   bar.style.transition='width 200ms ease-out';bar.style.width='100%';
   tube.classList.remove('active');
-  addHistory(result,max);
+  addHistory(result,max).focus();
 
   setTimeout(()=>{
     phase='idle';drawing=false;
@@ -659,6 +659,7 @@ function addHistory(n,max){
   });
   hist.prepend(li);
   updateCount();
+  return li.querySelector('.h-memo');
 }
 
 clampMax();
