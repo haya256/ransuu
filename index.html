@@ -112,6 +112,17 @@ h1{
   font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
   color:var(--copper);pointer-events:none;
 }
+/* 確定時は「/ 上限」を大きく出し、少し遅れて灯す */
+.range-label.result{
+  bottom:11%;font-size:clamp(1.5rem,7.5vw,2.3rem);font-weight:700;letter-spacing:.12em;
+  color:var(--amber);
+  text-shadow:0 0 10px rgba(255,180,84,.7),0 0 34px rgba(255,140,60,.4);
+  animation:labelOn .7s ease-out .35s backwards;
+}
+@keyframes labelOn{
+  0%{opacity:0;filter:blur(6px) brightness(2.5)}
+  100%{opacity:1;filter:none}
+}
 /* 波紋は fixed オーバーレイ内で拡大させ、ページ幅に影響させない */
 #waves{
   position:fixed;inset:0;z-index:2;pointer-events:none;
@@ -279,6 +290,7 @@ footer{
 @media (prefers-reduced-motion: reduce){
   .r1,.r2,.tube.active .r1,.tube.active .r2{animation:none}
   .digit.reveal{animation:none;opacity:1}
+  .range-label.result{animation:none}
   #hist li{animation:none}
 }
 </style>
@@ -296,7 +308,7 @@ footer{
         <span class="ring r2"></span>
       </div>
       <div class="digit" id="digit">&#8211;</div>
-      <div class="range-label" id="rangeLabel">1 &#8212; 15</div>
+      <div class="range-label" id="rangeLabel"></div>
     </div>
 
     <div class="status-row" id="statusRow">
@@ -492,7 +504,8 @@ function clampMax(){
   if(!Number.isFinite(v)) v=15;
   v=Math.min(100,Math.max(2,v));
   maxInput.value=v;
-  rangeLabel.innerHTML=`1 &#8212; ${v}`;
+  rangeLabel.textContent='';
+  rangeLabel.classList.remove('result');
   return v;
 }
 /* 上限の変更は上部のビッグ数字にもリアルタイム反映する(操作中は無効なので抽選中には走らない) */
@@ -652,6 +665,8 @@ async function runDraw(){
   digit.textContent=result;
   void digit.offsetWidth;
   digit.classList.add('reveal');
+  rangeLabel.textContent=`/ ${max}`;
+  rangeLabel.classList.add('result');
   flashEl.classList.remove('on');void flashEl.offsetWidth;flashEl.classList.add('on');
   if(!REDUCED)waves();
   const rc=tube.getBoundingClientRect();
