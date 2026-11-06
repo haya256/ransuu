@@ -748,7 +748,7 @@ function addHistory(n,max,nuki){
   const li=document.createElement('li');
   const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
   const numHtml=n==null?'':
-    `<span class="h-numwrap"><span class="h-num">${n}</span><span class="h-range">/ 1–${max}</span></span>`;
+    `<span class="h-numwrap"><span class="h-num">${n}</span><span class="h-range">/ ${max}</span></span>`;
   const memoLabel=n==null?'メモ':'この数字へのメモ';
   li.innerHTML=
     numHtml+
