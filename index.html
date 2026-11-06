@@ -185,6 +185,16 @@ h1{
 }
 .max-ctl .step:hover{filter:brightness(1.2)}
 .max-ctl .step:disabled{opacity:.5;cursor:default;filter:none}
+.mode-ctl{
+  display:flex;align-items:center;gap:.4rem;
+  font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;color:var(--dim);
+  cursor:pointer;user-select:none;transition:opacity .2s,color .2s;
+}
+.mode-ctl input{accent-color:var(--amber);width:15px;height:15px;margin:0;cursor:pointer}
+.mode-ctl:has(input:checked){color:var(--amber)}
+.mode-ctl.inactive{opacity:.45} /* 上限20以下では全数字が対象になるため無効 */
+.mode-ctl:has(input:disabled){cursor:default}
+.mode-ctl input:disabled{cursor:default}
 button{
   font-family:var(--sans);font-size:.95rem;cursor:pointer;
   border-radius:8px;padding:.68rem 1.6rem;border:1px solid transparent;
@@ -250,6 +260,10 @@ body.sorting,body.sorting *{cursor:grabbing !important}
 }
 .h-range{font-family:var(--mono);font-size:.68rem;color:var(--dim)}
 .h-time{grid-area:time;font-family:var(--mono);font-size:.75rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.h-mode{
+  margin-left:.5rem;padding:.05rem .35rem;border:1px solid #3c3222;border-radius:4px;
+  font-size:.62rem;letter-spacing:.05em;color:var(--copper);
+}
 .h-memo{
   grid-area:memo;width:100%;min-width:6rem;
   background:transparent;border:none;border-bottom:1px solid #2a3040;
@@ -332,6 +346,7 @@ footer{
         <select id="max" title="ホイールで増減（Shift で ±10）"></select>
         <button class="step" id="maxUp" type="button" aria-label="上限を1増やす">&#43;</button>
         の整数</label>
+      <label class="mode-ctl" id="modeCtl"><input type="checkbox" id="nukiMode">中抜きモード</label>
       <button id="drawBtn">抽選開始</button>
     </div>
   </section>
@@ -354,7 +369,7 @@ const tube=$('tube'),digit=$('digit'),rangeLabel=$('rangeLabel'),
       statusRow=$('statusRow'),statusEl=$('status'),bar=$('bar'),
       maxInput=$('max'),maxDown=$('maxDown'),maxUp=$('maxUp'),drawBtn=$('drawBtn'),
       hist=$('hist'),empty=$('empty'),countEl=$('count'),flashEl=$('flash'),
-      wavesBox=$('waves');
+      wavesBox=$('waves'),nukiMode=$('nukiMode'),modeCtl=$('modeCtl');
 
 const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CHARGE=REDUCED?300:1600, BLACKOUT=REDUCED?250:650;
@@ -515,6 +530,26 @@ function clampMax(){
   maxInput.value=v;
   return v;
 }
+/* 中抜きモード: 1〜10 と (上限-9)〜上限 の数字だけを対象にする。
+   上限20以下なら全数字が含まれるのでモードは無視 */
+const NUKI_SPAN=10, NUKI_MIN_MAX=NUKI_SPAN*2;
+function nukiActive(max){return nukiMode.checked&&max>NUKI_MIN_MAX;}
+function makePool(max){
+  const a=[];
+  for(let i=1;i<=max;i++){
+    if(!nukiActive(max)||i<=NUKI_SPAN||i>max-NUKI_SPAN)a.push(i);
+  }
+  return a;
+}
+function pick(pool){return pool[Math.floor(Math.random()*pool.length)];}
+function syncMode(){
+  const v=parseInt(maxInput.value,10);
+  const off=nukiMode.checked&&!(v>NUKI_MIN_MAX);
+  modeCtl.classList.toggle('inactive',off);
+  modeCtl.title=off?`上限${NUKI_MIN_MAX}以下では全数字が対象になるため無効です`
+    :`1〜${NUKI_SPAN} と 上限から${NUKI_SPAN}個以内の数字だけを抽選します`;
+}
+nukiMode.addEventListener('change',()=>{syncMode();tickSound();});
 function hideRangeLabel(){
   rangeLabel.textContent='';
   rangeLabel.classList.remove('result');
@@ -527,6 +562,7 @@ function syncDigit(){
   digit.classList.remove('reveal');
   rangeLabel.textContent=`/ ${v}`;
   rangeLabel.classList.add('result');
+  syncMode();
   return v;
 }
 maxInput.addEventListener('change',syncDigit);
@@ -555,7 +591,7 @@ function stepMax(delta){
 maxDown.addEventListener('click',()=>stepMax(-1));
 maxUp.addEventListener('click',()=>stepMax(1));
 function setControlsDisabled(v){
-  maxInput.disabled=v;maxDown.disabled=v;maxUp.disabled=v;
+  maxInput.disabled=v;maxDown.disabled=v;maxUp.disabled=v;nukiMode.disabled=v;
 }
 
 function wait(ms){
@@ -630,7 +666,9 @@ async function runDraw(){
   drawing=true;cancelled=false;
   const max=clampMax();
   hideRangeLabel();
-  const result=1+Math.floor(Math.random()*max);
+  const nuki=nukiActive(max);
+  const pool=makePool(max);
+  const result=pick(pool);
 
   setControlsDisabled(true);
   drawBtn.textContent='キャンセル';
@@ -654,7 +692,7 @@ async function runDraw(){
   for(const d of delays){
     if(cancelled)break;
     let v,tries=0;
-    do{v=1+Math.floor(Math.random()*max);}while((v===last||v===result)&&++tries<12);
+    do{v=pick(pool);}while((v===last||v===result)&&++tries<12);
     last=v;
     digit.textContent=v;
     jitter();
@@ -689,7 +727,7 @@ async function runDraw(){
   setStatus('確定','lock');
   bar.style.transition='width 200ms ease-out';bar.style.width='100%';
   tube.classList.remove('active');
-  addHistory(result,max).focus();
+  addHistory(result,max,nuki).focus();
 
   setTimeout(()=>{
     phase='idle';drawing=false;
@@ -706,7 +744,7 @@ function updateCount(){
   countEl.textContent=n?`${n}件`:'';
   empty.style.display=n?'none':'';
 }
-function addHistory(n,max){
+function addHistory(n,max,nuki){
   const li=document.createElement('li');
   const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
   const numHtml=n==null?'':
@@ -714,7 +752,7 @@ function addHistory(n,max){
   const memoLabel=n==null?'メモ':'この数字へのメモ';
   li.innerHTML=
     numHtml+
-    `<span class="h-time">${t}</span>`+
+    `<span class="h-time">${t}${nuki?`<span class="h-mode" title="1–${NUKI_SPAN} と ${max-NUKI_SPAN+1}–${max} から抽選">中抜き</span>`:''}</span>`+
     `<input class="h-memo" type="text" placeholder="メモ" aria-label="${memoLabel}">`+
     `<label class="h-done"><input type="checkbox">完了</label>`+
     `<button class="h-del" type="button" title="この記録を削除" aria-label="この記録を削除">&#10005;</button>`;
