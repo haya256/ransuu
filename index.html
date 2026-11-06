@@ -585,8 +585,8 @@ function abortDraw(){
   stopHum();
   phase='idle';
   digit.style.transform='';digit.style.opacity='';
-  digit.classList.remove('flicker');
-  digit.classList.add('dark');
+  digit.classList.remove('flicker','dark');
+  syncDigit();
   tube.classList.remove('active');
   bar.style.transition='width 300ms ease-out';bar.style.width='0';
   setStatus('中止');
